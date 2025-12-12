@@ -1,0 +1,302 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cinéma CY Tech - Accueil</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}">
+</head>
+<body>
+    <nav class="navbar">
+        <div class="navbar-container">
+            <a href="{{ url_for('accueil') }}" class="navbar-brand">🎬 Cinéma CY Tech</a>
+            <ul class="nav-links">
+                <li><a href="{{ url_for('accueil') }}">Accueil</a></li>
+                {% if session.username %}
+                    <li><a href="/my-bookings">Mes Réservations</a></li>
+                    {% if session.role == 'admin' %}
+                        <li><a href="{{ url_for('ajout_film') }}">Gérer Films</a></li>
+                        <li><a href="/admin/sessions">Gérer Séances</a></li>
+                    {% endif %}
+                    <li><a href="#" id="logoutLink">Déconnexion</a></li>
+                {% else %}
+                    <li><a href="{{ url_for('connection') }}">Connexion</a></li>
+                    <li><a href="{{ url_for('inscription') }}">Inscription</a></li>
+                {% endif %}
+            </ul>
+        </div>
+    </nav>
+
+    <div class="container">
+        <div class="hero">
+            <h1>🎞️ Bienvenue au Cinéma CY Tech</h1>
+            <p>Découvrez nos films à l'affiche et réservez vos places en ligne</p>
+            {% if not session.username %}
+                <a href="{{ url_for('connection') }}" class="btn btn-gold">Connectez-vous pour réserver</a>
+            {% endif %}
+        </div>
+        <div class="section">
+            <div class="section-header">
+                <h2 class="section-title">🎥 Séances Disponibles</h2>
+            </div>
+            <div id="seancesContainer">
+                <div class="spinner" id="loadingSpinner"></div>
+            </div>
+        </div>
+    </div>
+
+    <footer class="footer">
+        <p>&copy; 2025 Cinéma CY Tech - Votre destination cinéma</p>
+    </footer>
+
+    <div id="reservationModal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.85); z-index: 9999; justify-content: center; align-items: center;">
+        <div style="background: var(--cinema-card); border-radius: 12px; padding: 2rem; max-width: 500px; width: 90%; box-shadow: 0 10px 40px rgba(0,0,0,0.5);">
+            <h2 style="color: var(--cinema-accent); margin-bottom: 1rem; font-size: 1.5rem;">🎟️ Réserver vos places</h2>
+            <div id="modalContent" style="margin-bottom: 1.5rem;"></div>
+            <div style="margin-bottom: 1.5rem;">
+                <label style="display: block; margin-bottom: 0.5rem; color: var(--cinema-text); font-weight: 500;">Nombre de places :</label>
+                <div id="seatsButtons" style="display: flex; gap: 0.5rem; flex-wrap: wrap;"></div>
+            </div>
+            <div id="modalMessage" style="padding: 1rem; border-radius: 8px; margin-bottom: 1rem; display: none;"></div>
+            <div style="display: flex; gap: 1rem; justify-content: flex-end;">
+                <button onclick="closeModal()" class="btn" style="background: #666;">Annuler</button>
+                <button id="confirmBtn" onclick="confirmReservation()" class="btn btn-primary">Confirmer</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const seancesContainer = document.getElementById('seancesContainer');
+        const loadingSpinner = document.getElementById('loadingSpinner');
+
+        // Charger les séances au démarrage
+        loadSeances();
+
+        // Charge et affiche les séances groupées par film sous forme de grille
+        async function loadSeances() {
+            try {
+                loadingSpinner.style.display = 'block';
+                const response = await fetch('/api/seances');
+                const seances = await response.json();
+                
+                loadingSpinner.style.display = 'none';
+
+                if (seances.length === 0) {
+                    seancesContainer.innerHTML = '<p class="text-center text-light" style="padding: 3rem; font-size: 1.2rem;">Aucune séance programmée pour le moment. Revenez bientôt !</p>';
+                    return;
+                }
+
+                // Grouper les séances par film
+                const seancesByFilm = {};
+                seances.forEach(s => {
+                    if (!seancesByFilm[s.film]) {
+                        seancesByFilm[s.film] = {
+                            poster_url: s.poster_url,
+                            sessions: []
+                        };
+                    }
+                    seancesByFilm[s.film].sessions.push(s);
+                });
+
+                // Afficher sous forme de grille de films
+                let html = '<div class="movies-grid">';
+                
+                Object.keys(seancesByFilm).forEach(filmTitle => {
+                    const filmData = seancesByFilm[filmTitle];
+                    const posterUrl = filmData.poster_url || 'https://via.placeholder.com/280x400/141414/e50914?text=' + encodeURIComponent(filmTitle);
+                    
+                    html += `
+                        <div class="movie-card">
+                            <img src="${posterUrl}" alt="${filmTitle}" class="movie-poster">
+                            <div class="movie-info">
+                                <h3 class="movie-title">${filmTitle}</h3>
+                                <div class="movie-sessions">
+                    `;
+                    
+                    filmData.sessions.forEach(s => {
+                        const [date, time] = s.horaire.split(' ');
+                        const remaining = s.remaining || 0;
+                        const isAvailable = remaining > 0;
+                        
+                        if (isAvailable) {
+                            html += `
+                                <button class="session-time" onclick="reserverSeance(${s.id}, '${filmTitle}', '${time}', ${remaining})" ${!isSessionUser() ? 'disabled title="Connectez-vous pour réserver"' : ''}>
+                                    ${time} (${remaining} places)
+                                </button>
+                            `;
+                        } else {
+                            html += `
+                                <span class="session-time" style="background: #666; cursor: not-allowed;" title="Complet">
+                                    ${time} (COMPLET)
+                                </span>
+                            `;
+                        }
+                    });
+                    
+                    html += `
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                });
+                
+                html += '</div>';
+                seancesContainer.innerHTML = html;
+            } catch (error) {
+                loadingSpinner.style.display = 'none';
+                console.error('Erreur:', error);
+                seancesContainer.innerHTML = '<div class="alert alert-error">Erreur lors du chargement des séances</div>';
+            }
+        }
+
+        // Vérifie si un utilisateur est connecté via la session
+        function isSessionUser() {
+            {% if session.username %}
+            return true;
+            {% else %}
+            return false;
+            {% endif %}
+        }
+
+        let currentReservation = null;
+        let selectedSeats = 1;
+
+        // Ouvre le modal de réservation avec les informations de la séance
+        function openModal(seanceId, filmTitle, time, remaining) {
+            currentReservation = { seanceId, filmTitle, time, remaining };
+            selectedSeats = 1;
+            
+            const modal = document.getElementById('reservationModal');
+            const modalContent = document.getElementById('modalContent');
+            const seatsButtons = document.getElementById('seatsButtons');
+            const modalMessage = document.getElementById('modalMessage');
+            
+            modalContent.innerHTML = `
+                <div style="color: var(--cinema-text); margin-bottom: 1rem;">
+                    <p style="font-size: 1.1rem; margin-bottom: 0.5rem;"><strong>${filmTitle}</strong></p>
+                    <p style="color: var(--cinema-text-dim);">🕐 ${time}</p>
+                    <p style="color: var(--cinema-gold); margin-top: 0.5rem;">📍 ${remaining} places restantes</p>
+                </div>
+            `;
+            
+            // Créer les boutons de sélection (1-5 ou moins si pas assez de places)
+            const maxSeats = Math.min(5, remaining);
+            seatsButtons.innerHTML = '';
+            for (let i = 1; i <= maxSeats; i++) {
+                const btn = document.createElement('button');
+                btn.textContent = i;
+                btn.className = 'btn';
+                btn.style.cssText = 'min-width: 50px; background: #444;';
+                btn.onclick = () => selectSeats(i, maxSeats);
+                if (i === 1) {
+                    btn.style.background = 'var(--cinema-accent)';
+                }
+                seatsButtons.appendChild(btn);
+            }
+            
+            modalMessage.style.display = 'none';
+            modal.style.display = 'flex';
+        }
+
+        // Met à jour le nombre de places sélectionnées et met en surbrillance le bouton correspondant
+        function selectSeats(num, max) {
+            selectedSeats = num;
+            const buttons = document.querySelectorAll('#seatsButtons button');
+            buttons.forEach((btn, idx) => {
+                if (idx + 1 === num) {
+                    btn.style.background = 'var(--cinema-accent)';
+                } else {
+                    btn.style.background = '#444';
+                }
+            });
+        }
+
+        // Ferme le modal de réservation et réinitialise les données
+        function closeModal() {
+            document.getElementById('reservationModal').style.display = 'none';
+            currentReservation = null;
+        }
+
+        // Envoie la requête de réservation au serveur et affiche le résultat
+        async function confirmReservation() {
+            if (!currentReservation) return;
+            
+            const { seanceId, filmTitle, time } = currentReservation;
+            const modalMessage = document.getElementById('modalMessage');
+            const confirmBtn = document.getElementById('confirmBtn');
+            
+            confirmBtn.disabled = true;
+            confirmBtn.textContent = 'Réservation...';
+
+            try {
+                const response = await fetch('/reserve', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    credentials: 'include',
+                    body: JSON.stringify({ seance_id: seanceId, seats: selectedSeats })
+                });
+
+                const data = await response.json();
+
+                if (response.ok) {
+                    modalMessage.style.display = 'block';
+                    modalMessage.style.background = '#10b981';
+                    modalMessage.style.color = 'white';
+                    modalMessage.innerHTML = `✅ ${data.message}<br><small>Rendez-vous dans 'Mes Réservations'</small>`;
+                    
+                    setTimeout(() => {
+                        closeModal();
+                        loadSeances();
+                    }, 2000);
+                } else {
+                    modalMessage.style.display = 'block';
+                    modalMessage.style.background = '#ef4444';
+                    modalMessage.style.color = 'white';
+                    modalMessage.textContent = data.message;
+                    confirmBtn.disabled = false;
+                    confirmBtn.textContent = 'Confirmer';
+                }
+            } catch (error) {
+                console.error('Erreur:', error);
+                modalMessage.style.display = 'block';
+                modalMessage.style.background = '#ef4444';
+                modalMessage.style.color = 'white';
+                modalMessage.textContent = 'Une erreur est survenue. Veuillez réessayer.';
+                confirmBtn.disabled = false;
+                confirmBtn.textContent = 'Confirmer';
+            }
+        }
+
+        // Vérifie que l'utilisateur est connecté puis ouvre le modal de réservation
+        async function reserverSeance(seanceId, filmTitle, time, remaining) {
+            if (!isSessionUser()) {
+                window.location.href = '/connection';
+                return;
+            }
+            
+            openModal(seanceId, filmTitle, time, remaining);
+        }
+
+        // Logout handler
+        const logoutLink = document.getElementById('logoutLink');
+        if (logoutLink) {
+            logoutLink.addEventListener('click', async (e) => {
+                e.preventDefault();
+                try {
+                    const res = await fetch('/logout', {
+                        method: 'POST',
+                        credentials: 'include'
+                    });
+                    if (res.ok) {
+                        window.location.href = '/';
+                    }
+                } catch (err) {
+                    console.error(err);
+                }
+            });
+        }
+    </script>
+</body>
+</html>
