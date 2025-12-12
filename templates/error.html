@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Erreur - Cinéma CY Tech</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}">
+</head>
+<body>
+    <nav class="navbar">
+        <a href="{{ url_for('accueil') }}" class="navbar-brand">Cinéma CY Tech</a>
+        <ul class="nav-links">
+            <li><a href="{{ url_for('accueil') }}">Accueil</a></li>
+        </ul>
+    </nav>
+
+    <div class="container">
+        <div class="card" style="max-width: 600px; margin: 4rem auto; text-align: center;">
+            <div class="card-header">
+                <h1>⛔ Accès Refusé</h1>
+            </div>
+
+            <div class="alert alert-error">
+                <span>{{ message or "Vous n'avez pas les permissions nécessaires pour accéder à cette page." }}</span>
+            </div>
+
+            <p class="text-light mb-4">
+                Cette page est réservée aux administrateurs. Si vous pensez qu'il s'agit d'une erreur, 
+                veuillez contacter l'administrateur du système.
+            </p>
+
+            <div style="display: flex; gap: 1rem; justify-content: center; flex-wrap: wrap;">
+                <a href="{{ url_for('accueil') }}" class="btn btn-primary">Retour à l'accueil</a>
+                {% if not session.username %}
+                    <a href="{{ url_for('connection') }}" class="btn btn-secondary">Se connecter</a>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <footer class="footer">
+        <p>&copy; 2025 Cinéma CY Tech</p>
+    </footer>
+</body>
+</html>

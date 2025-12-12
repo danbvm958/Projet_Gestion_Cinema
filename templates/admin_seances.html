@@ -1,0 +1,259 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ajouter une Séance - Cinéma CY Tech</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}">
+</head>
+<body>
+    <nav class="navbar">
+        <div class="navbar-container">
+            <a href="{{ url_for('accueil') }}" class="navbar-brand">🎬 Cinéma CY Tech</a>
+            <ul class="nav-links">
+                <li><a href="{{ url_for('accueil') }}">Accueil</a></li>
+                <li><a href="/my-bookings">Mes Réservations</a></li>
+                <li><a href="{{ url_for('ajout_film') }}">Gérer Films</a></li>
+                <li><a href="/admin/sessions">Gérer Séances</a></li>
+                <li><a href="#" id="logoutLink">Déconnexion</a></li>
+            </ul>
+        </div>
+    </nav>
+
+    <div class="container">
+        <div class="card" style="max-width: 600px; margin: 2rem auto;">
+            <div class="card-header">
+                <h1>🎞️ Créer une Séance</h1>
+                <p>Planifiez une nouvelle projection</p>
+            </div>
+
+            <div id="successMessage" class="alert alert-success hidden">
+                <span id="successText"></span>
+            </div>
+            <div id="errorMessage" class="alert alert-error hidden">
+                <span id="errorText"></span>
+            </div>
+
+            <form id="formSeance">
+                <div class="form-group">
+                    <label for="film_id">ID du Film</label>
+                    <input type="number" id="film_id" name="film_id" class="form-control" placeholder="Ex: 1" required min="1">
+                    <small class="text-sm text-light">Identifiant du film dans la base de données</small>
+                </div>
+
+                <div class="form-group">
+                    <label for="salle">Numéro de Salle</label>
+                    <select id="salle" name="salle" class="form-control" required>
+                        <option value="">Sélectionnez une salle</option>
+                        <option value="1">Salle 1</option>
+                        <option value="2">Salle 2</option>
+                        <option value="3">Salle 3</option>
+                        <option value="4">Salle 4</option>
+                        <option value="5">Salle 5</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="date">Date</label>
+                    <input type="date" id="date" name="date" class="form-control" required>
+                    <small class="text-sm text-light">Jour de la projection</small>
+                </div>
+
+                <div class="form-group">
+                    <label for="horaire">Horaire</label>
+                    <input type="time" id="horaire" name="horaire" class="form-control" required>
+                    <small class="text-sm text-light">Heure de début de la séance</small>
+                </div>
+
+                <button type="submit" class="btn btn-primary btn-block">Créer la séance</button>
+                <a href="{{ url_for('accueil') }}" class="btn btn-secondary btn-block mt-2">Retour à l'accueil</a>
+            </form>
+
+            <div class="mt-4">
+                <h3 class="text-lg font-semibold mb-2">📋 Liste des Séances</h3>
+                <div id="seancesList" style="max-height: 300px; overflow-y: auto;">
+                    <div class="spinner" id="loadingSpinner"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <footer class="footer">
+        <p>&copy; 2025 Cinéma CY Tech</p>
+    </footer>
+
+    <script>
+        // Définir la date minimale à aujourd'hui
+        const dateInput = document.getElementById('date');
+        const today = new Date().toISOString().split('T')[0];
+        dateInput.min = today;
+
+        const formSeance = document.getElementById("formSeance");
+        const successMessage = document.getElementById('successMessage');
+        const errorMessage = document.getElementById('errorMessage');
+        const successText = document.getElementById('successText');
+        const errorText = document.getElementById('errorText');
+        const seancesList = document.getElementById('seancesList');
+        const loadingSpinner = document.getElementById('loadingSpinner');
+
+        // Charger la liste des séances au chargement
+        loadSeances();
+
+        // Le gestionnaire sera défini plus bas dans handleAddSeance
+
+        async function loadSeances() {
+            try {
+                loadingSpinner.style.display = 'block';
+                const res = await fetch("/api/seances");
+                const seances = await res.json();
+                loadingSpinner.style.display = 'none';
+
+                if (seances.length === 0) {
+                    seancesList.innerHTML = '<p class="text-light text-center">Aucune séance programmée</p>';
+                    return;
+                }
+
+                let html = '<div style="display: flex; flex-direction: column; gap: 1rem;">';
+                seances.forEach(s => {
+                    const [date, time] = s.horaire.split(' ');
+                    const posterUrl = s.poster_url || 'https://via.placeholder.com/80x120/141414/e50914?text=Film';
+                    html += `
+                        <div class="seance-card" style="padding: 1rem;">
+                            <img src="${posterUrl}" alt="${s.film}" style="width: 60px; height: 90px; object-fit: cover; border-radius: 6px; box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);">
+                            <div class="seance-info">
+                                <h4 class="seance-title" style="font-size: 1.2rem;">${s.film}</h4>
+                                <div class="seance-meta">
+                                    <span>📅 ${date}</span>
+                                    <span>🕐 ${time}</span>
+                                    <span>🚪 Salle ${s.salle}</span>
+                                </div>
+                            </div>
+                            <div class="seance-actions">
+                                <button onclick="deleteSeance(${s.id}, '${s.film}')" class="btn btn-primary" style="padding: 0.5rem 1rem; font-size: 0.9rem; background: #ef4444;">
+                                    🗑️ Supprimer
+                                </button>
+                            </div>
+                        </div>
+                    `;
+                });
+                html += '</div>';
+                seancesList.innerHTML = html;
+            } catch (error) {
+                loadingSpinner.style.display = 'none';
+                console.error('Erreur lors du chargement des séances:', error);
+                seancesList.innerHTML = '<p class="text-light text-center">Erreur de chargement</p>';
+            }
+        }
+
+        // Supprime une séance après confirmation de l'utilisateur
+        async function deleteSeance(seanceId, filmTitle) {
+            if (!confirm(`Êtes-vous sûr de vouloir supprimer la séance "${filmTitle}" ?\n\nToutes les réservations associées seront également supprimées.`)) {
+                return;
+            }
+
+            try {
+                const res = await fetch(`/delete_seance/${seanceId}`, {
+                    method: 'DELETE',
+                    credentials: 'include'
+                });
+
+                const result = await res.json();
+
+                if (res.ok) {
+                    successText.textContent = result.message;
+                    successMessage.classList.remove('hidden');
+                    loadSeances();
+
+                    setTimeout(() => {
+                        successMessage.classList.add('hidden');
+                    }, 3000);
+                } else {
+                    errorText.textContent = result.message || "Erreur lors de la suppression.";
+                    errorMessage.classList.remove('hidden');
+                }
+            } catch (error) {
+                console.error('Erreur:', error);
+                errorText.textContent = "Erreur de connexion au serveur.";
+                errorMessage.classList.remove('hidden');
+            }
+        }
+
+        // Gère l'ajout d'une nouvelle séance avec validation de la date/heure
+        async function handleAddSeance(e) {
+            e.preventDefault();
+
+            successMessage.classList.add('hidden');
+            errorMessage.classList.add('hidden');
+
+            const formData = new FormData(e.target);
+            const data = Object.fromEntries(formData.entries());
+            data.salle = parseInt(data.salle);
+            data.film_id = parseInt(data.film_id);
+
+            // Validation côté client : vérifier que la séance est dans le futur
+            const seanceDateTime = new Date(`${data.date}T${data.horaire}`);
+            const now = new Date();
+            
+            if (seanceDateTime <= now) {
+                errorText.textContent = "⚠️ Impossible de créer une séance dans le passé. Veuillez choisir une date et heure futures.";
+                errorMessage.classList.remove('hidden');
+                return;
+            }
+
+            try {
+                const res = await fetch("/add_seance", {
+                    method: "POST",
+                    headers: {"Content-Type": "application/json"},
+                    body: JSON.stringify(data),
+                    credentials: 'include'
+                });
+
+                const result = await res.json();
+
+                if (res.ok) {
+                    successText.textContent = result.message;
+                    successMessage.classList.remove('hidden');
+                    formSeance.reset();
+                    loadSeances();
+
+                    setTimeout(() => {
+                        successMessage.classList.add('hidden');
+                    }, 5000);
+                } else {
+                    errorText.textContent = result.message || "Erreur lors de la création de la séance.";
+                    errorMessage.classList.remove('hidden');
+                }
+            } catch (error) {
+                console.error('Erreur:', error);
+                errorText.textContent = "Erreur de connexion au serveur. Veuillez réessayer.";
+                errorMessage.classList.remove('hidden');
+            }
+        }
+
+        // Attacher le gestionnaire par défaut
+        formSeance.onsubmit = handleAddSeance;
+
+        // Logout handler
+        const logoutLink = document.getElementById('logoutLink');
+        if (logoutLink) {
+            logoutLink.addEventListener('click', async (e) => {
+                e.preventDefault();
+                try {
+                    const res = await fetch('/logout', {
+                        method: 'POST',
+                        credentials: 'include'
+                    });
+                    const data = await res.json();
+                    if (res.ok) {
+                        window.location.href = '/';
+                    } else {
+                        alert('Erreur lors de la déconnexion');
+                    }
+                } catch (err) {
+                    console.error(err);
+                    alert('Erreur réseau');
+                }
+            });
+        }
+    </script>
+</body>
+</html>

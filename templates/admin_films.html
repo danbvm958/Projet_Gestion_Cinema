@@ -1,0 +1,329 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ajouter un Film - Cinéma CY Tech</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}">
+</head>
+<body>
+    <nav class="navbar">
+        <div class="navbar-container">
+            <a href="{{ url_for('accueil') }}" class="navbar-brand">🎬 Cinéma CY Tech</a>
+            <ul class="nav-links">
+                <li><a href="{{ url_for('accueil') }}">Accueil</a></li>
+                <li><a href="/my-bookings">Mes Réservations</a></li>
+                <li><a href="{{ url_for('ajout_film') }}">Gérer Films</a></li>
+                <li><a href="/admin/sessions">Gérer Séances</a></li>
+                <li><a href="#" id="logoutLink">Déconnexion</a></li>
+            </ul>
+        </div>
+    </nav>
+
+    <div class="container">
+        <div class="card" style="max-width: 600px; margin: 2rem auto;">
+            <div class="card-header">
+                <h1>🎬 Ajouter un Film</h1>
+                <p>Enrichissez votre catalogue de films</p>
+            </div>
+            <div id="successMessage" class="alert alert-success hidden">
+                <span id="successText"></span>
+            </div>
+            <div id="errorMessage" class="alert alert-error hidden">
+                <span id="errorText"></span>
+            </div>
+
+            <form id="addFilmForm">
+                <div class="form-group">
+                    <label for="title">Titre du film</label>
+                    <input type="text" id="title" name="title" class="form-control" placeholder="Ex: Inception" required>
+                </div>
+
+                <div class="form-group">
+                    <label for="year">Année de sortie</label>
+                    <input type="number" id="year" name="year" class="form-control" placeholder="Ex: 2010" required min="1900" max="2030">
+                </div>
+
+                <div class="form-group">
+                    <label for="genre">Genre</label>
+                    <input type="text" id="genre" name="genre" class="form-control" placeholder="Ex: Science-fiction, Action" required>
+                </div>
+
+                <div class="form-group">
+                    <label for="duration">Durée (en minutes)</label>
+                    <input type="number" id="duration" name="duration" class="form-control" placeholder="Ex: 148" required min="1" max="500">
+                </div>
+
+                <div class="form-group">
+                    <label for="classification">Classification</label>
+                    <select id="classification" name="classification" class="form-control" required>
+                        <option value="">Sélectionnez une classification</option>
+                        <option value="Tous publics">Tous publics</option>
+                        <option value="-12">-12</option>
+                        <option value="-16">-16</option>
+                        <option value="-18">-18</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label for="poster_url">URL de l'affiche (optionnel)</label>
+                    <input type="url" id="poster_url" name="poster_url" class="form-control" placeholder="https://exemple.com/affiche.jpg">
+                </div>
+
+                <button type="submit" class="btn btn-primary btn-block">Ajouter le film</button>
+                <a href="{{ url_for('accueil') }}" class="btn btn-secondary btn-block mt-2">Retour à l'accueil</a>
+            </form>
+
+            <div class="mt-4">
+                <h3 class="text-lg font-semibold mb-2">📋 Films existants</h3>
+                <div id="filmsList" style="max-height: 400px; overflow-y: auto;">
+                    <div class="spinner" id="loadingSpinner"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <footer class="footer">
+        <p>&copy; 2025 Cinéma CY Tech</p>
+    </footer>
+
+    <div id="posterModal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.85); z-index: 9999; justify-content: center; align-items: center;">
+        <div style="background: var(--cinema-card); border-radius: 12px; padding: 2rem; max-width: 500px; width: 90%; box-shadow: 0 10px 40px rgba(0,0,0,0.5);">
+            <h2 style="color: var(--cinema-accent); margin-bottom: 1rem; font-size: 1.5rem;">🖼️ Modifier l'affiche</h2>
+            <p id="modalFilmTitle" style="color: var(--cinema-text); margin-bottom: 1.5rem; font-size: 1rem;"></p>
+            
+            <div style="margin-bottom: 1.5rem;">
+                <label style="display: block; margin-bottom: 0.5rem; color: var(--cinema-text); font-weight: 500;">URL de l'affiche :</label>
+                <input type="url" id="newPosterUrl" class="form-control" placeholder="https://exemple.com/affiche.jpg" style="width: 100%;">
+            </div>
+            
+            <div id="modalPosterMessage" style="padding: 1rem; border-radius: 8px; margin-bottom: 1rem; display: none;"></div>
+            
+            <div style="display: flex; gap: 1rem; justify-content: flex-end;">
+                <button onclick="closePosterModal()" class="btn" style="background: #666;">Annuler</button>
+                <button id="confirmPosterBtn" onclick="confirmPosterUpdate()" class="btn btn-primary">Confirmer</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const addFilmForm = document.getElementById('addFilmForm');
+        const successMessage = document.getElementById('successMessage');
+        const errorMessage = document.getElementById('errorMessage');
+        const successText = document.getElementById('successText');
+        const errorText = document.getElementById('errorText');
+        const filmsList = document.getElementById('filmsList');
+        const loadingSpinner = document.getElementById('loadingSpinner');
+
+        // Charger la liste des films au chargement de la page
+        loadFilms();
+
+        addFilmForm.addEventListener('submit', async function(event) {
+            event.preventDefault();
+
+            // Masquer les messages précédents
+            successMessage.classList.add('hidden');
+            errorMessage.classList.add('hidden');
+
+            const filmData = {
+                title: document.getElementById('title').value,
+                year: parseInt(document.getElementById('year').value),
+                genre: document.getElementById('genre').value,
+                duration: parseInt(document.getElementById('duration').value),
+                classification: document.getElementById('classification').value,
+                poster_url: document.getElementById('poster_url').value
+            };
+
+            try {
+                const response = await fetch('/add_film', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(filmData),
+                    credentials: 'include'
+                });
+
+                const data = await response.json();
+
+                if (response.ok) {
+                    console.log('Film ajouté:', data);
+                    successText.textContent = `Film "${filmData.title}" ajouté avec succès !`;
+                    successMessage.classList.remove('hidden');
+                    
+                    // Réinitialiser le formulaire
+                    addFilmForm.reset();
+
+                    // Recharger la liste des films
+                    loadFilms();
+
+                    // Masquer le message après 5 secondes
+                    setTimeout(() => {
+                        successMessage.classList.add('hidden');
+                    }, 5000);
+                } else {
+                    errorText.textContent = data.message || "Erreur lors de l'ajout du film.";
+                    errorMessage.classList.remove('hidden');
+                }
+            } catch (error) {
+                console.error('Erreur:', error);
+                errorText.textContent = "Erreur de connexion au serveur. Veuillez réessayer.";
+                errorMessage.classList.remove('hidden');
+            }
+        });
+
+        async function loadFilms() {
+            try {
+                loadingSpinner.style.display = 'block';
+                const response = await fetch('/films');
+                const films = await response.json();
+                
+                loadingSpinner.style.display = 'none';
+
+                if (films.length === 0) {
+                    filmsList.innerHTML = '<p class="text-light text-center">Aucun film dans le catalogue</p>';
+                    return;
+                }
+
+                let html = '<div style="display: flex; flex-direction: column; gap: 0.75rem;">';
+                films.forEach(film => {
+                    const posterUrl = film.poster_url || 'https://via.placeholder.com/80x120/141414/e50914?text=Film';
+                    html += `
+                        <div style="padding: 1rem; background: var(--cinema-card); border-radius: 8px; border-left: 4px solid var(--cinema-accent); display: flex; gap: 1rem;">
+                            <img src="${posterUrl}" alt="${film.title}" style="width: 80px; height: 120px; object-fit: cover; border-radius: 4px;">
+                            <div style="flex: 1;">
+                                <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 0.5rem;">
+                                    <strong style="font-size: 1.1rem; color: var(--cinema-text);">${film.title}</strong>
+                                    <span style="background: var(--cinema-accent); color: white; padding: 0.25rem 0.5rem; border-radius: 4px; font-size: 0.75rem;">ID: ${film.id}</span>
+                                </div>
+                                <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 0.5rem; font-size: 0.9rem; color: var(--cinema-text-dim); margin-bottom: 0.75rem;">
+                                    <div>📅 ${film.year}</div>
+                                    <div>🎭 ${film.genre}</div>
+                                    <div>⏱️ ${film.duration} min</div>
+                                    <div>🔞 ${film.classification}</div>
+                                </div>
+                                <button onclick="updatePoster(${film.id}, '${film.title}')" class="btn btn-primary" style="padding: 0.4rem 0.8rem; font-size: 0.85rem;">
+                                    🖼️ Modifier l'affiche
+                                </button>
+                            </div>
+                        </div>
+                    `;
+                });
+                html += '</div>';
+                filmsList.innerHTML = html;
+            } catch (error) {
+                loadingSpinner.style.display = 'none';
+                console.error('Erreur lors du chargement des films:', error);
+                filmsList.innerHTML = '<p class="text-light text-center">Érreur de chargement</p>';
+            }
+        }
+
+        // Variables pour le modal de modification d'affiche
+        let currentFilmId = null;
+        const posterModal = document.getElementById('posterModal');
+        const modalFilmTitle = document.getElementById('modalFilmTitle');
+        const newPosterUrlInput = document.getElementById('newPosterUrl');
+        const modalPosterMessage = document.getElementById('modalPosterMessage');
+
+        // Ouvre le modal pour modifier l'URL de l'affiche d'un film
+        function updatePoster(filmId, filmTitle) {
+            currentFilmId = filmId;
+            modalFilmTitle.textContent = `Film : "${filmTitle}"`;
+            newPosterUrlInput.value = '';
+            modalPosterMessage.style.display = 'none';
+            posterModal.style.display = 'flex';
+            newPosterUrlInput.focus();
+        }
+
+        // Ferme le modal de modification d'affiche
+        function closePosterModal() {
+            posterModal.style.display = 'none';
+            currentFilmId = null;
+        }
+
+        // Envoie la nouvelle URL d'affiche au serveur et met à jour l'affichage
+        async function confirmPosterUpdate() {
+            const newPosterUrl = newPosterUrlInput.value.trim();
+            
+            if (!newPosterUrl) {
+                modalPosterMessage.textContent = 'Veuillez entrer une URL valide';
+                modalPosterMessage.style.display = 'block';
+                modalPosterMessage.style.background = '#dc2626';
+                modalPosterMessage.style.color = 'white';
+                return;
+            }
+            
+            try {
+                const response = await fetch(`/update_film_poster/${currentFilmId}`, {
+                    method: 'PUT',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ poster_url: newPosterUrl }),
+                    credentials: 'include'
+                });
+
+                const data = await response.json();
+
+                if (response.ok) {
+                    closePosterModal();
+                    successText.textContent = data.message;
+                    successMessage.classList.remove('hidden');
+                    errorMessage.classList.add('hidden');
+                    
+                    // Recharger la liste des films
+                    loadFilms();
+                } else {
+                    modalPosterMessage.textContent = data.message || "Erreur lors de la mise à jour.";
+                    modalPosterMessage.style.display = 'block';
+                    modalPosterMessage.style.background = '#dc2626';
+                    modalPosterMessage.style.color = 'white';
+                }
+            } catch (error) {
+                console.error('Erreur:', error);
+                modalPosterMessage.textContent = "Erreur de connexion au serveur.";
+                modalPosterMessage.style.display = 'block';
+                modalPosterMessage.style.background = '#dc2626';
+                modalPosterMessage.style.color = 'white';
+            }
+        }
+
+        // Permettre la validation avec la touche Entrée
+        newPosterUrlInput.addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                confirmPosterUpdate();
+            }
+        });
+
+        // Fermer le modal en cliquant sur le fond
+        posterModal.addEventListener('click', function(e) {
+            if (e.target === posterModal) {
+                closePosterModal();
+            }
+        });
+
+        // Logout handler
+        const logoutLink = document.getElementById('logoutLink');
+        if (logoutLink) {
+            logoutLink.addEventListener('click', async (e) => {
+                e.preventDefault();
+                try {
+                    const res = await fetch('/logout', {
+                        method: 'POST',
+                        credentials: 'include'
+                    });
+                    const data = await res.json();
+                    if (res.ok) {
+                        window.location.href = '/';
+                    } else {
+                        alert('Erreur lors de la déconnexion');
+                    }
+                } catch (err) {
+                    console.error(err);
+                    alert('Erreur réseau');
+                }
+            });
+        }
+    </script>
+</body>
+</html>

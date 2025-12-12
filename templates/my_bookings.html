@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mes Réservations - Cinéma CY Tech</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}">
+</head>
+<body>
+    <nav class="navbar">
+        <div class="navbar-container">
+            <a href="{{ url_for('accueil') }}" class="navbar-brand">🎬 Cinéma CY Tech</a>
+            <ul class="nav-links">
+                <li><a href="{{ url_for('accueil') }}">Accueil</a></li>
+                <li><a href="/my-bookings">Mes Réservations</a></li>
+                {% if session.role == 'admin' %}
+                    <li><a href="{{ url_for('ajout_film') }}">Gérer Films</a></li>
+                    <li><a href="/admin/sessions">Gérer Séances</a></li>
+                {% endif %}
+                <li><a href="#" id="logoutLink">Déconnexion</a></li>
+            </ul>
+        </div>
+    </nav>
+
+    <div class="container">
+        <div class="card" style="max-width: 800px; margin: 2rem auto;">
+            <div class="card-header">
+                <h1>🎟️ Mes Réservations</h1>
+                <p>Retrouvez l'historique de vos séances réservées</p>
+            </div>
+
+            <div id="reservationsList">
+                <div class="spinner" id="loadingSpinner"></div>
+            </div>
+        </div>
+    </div>
+
+    <footer class="footer">
+        <p>&copy; 2025 Cinéma CY Tech</p>
+    </footer>
+
+    <script>
+        const reservationsList = document.getElementById('reservationsList');
+        const loadingSpinner = document.getElementById('loadingSpinner');
+
+        // Charger les réservations au chargement de la page
+        loadReservations();
+
+        async function loadReservations() {
+            try {
+                loadingSpinner.style.display = 'block';
+                const response = await fetch('/api/mes_reservations');
+                
+                if (response.status === 401) {
+                    window.location.href = '/connection';
+                    return;
+                }
+
+                const reservations = await response.json();
+                loadingSpinner.style.display = 'none';
+
+                if (reservations.length === 0) {
+                    reservationsList.innerHTML = '<p class="text-light text-center" style="padding: 2rem;">Vous n\'avez aucune réservation pour le moment.</p>';
+                    return;
+                }
+
+                let html = '<div style="display: flex; flex-direction: column; gap: 1.5rem;">';
+                
+                reservations.forEach(res => {
+                    const posterUrl = res.poster_url || 'https://via.placeholder.com/100x150/141414/e50914?text=Film';
+                    const [date, time] = res.horaire.split(' ');
+                    
+                    html += `
+                        <div class="reservation-card">
+                            <img src="${posterUrl}" alt="${res.film}" class="seance-poster">
+                            <div style="flex: 1;">
+                                <h3 class="seance-title">${res.film}</h3>
+                                <div class="reservation-meta">
+                                    <div class="meta-item">📅 <strong>Date:</strong> ${formatDate(date)}</div>
+                                    <div class="meta-item">🕐 <strong>Heure:</strong> ${time}</div>
+                                    <div class="meta-item">🚪 <strong>Salle:</strong> ${res.salle}</div>
+                                    <div class="meta-item">🎫 <strong>Places:</strong> ${res.seats}</div>
+                                </div>
+                                <div style="margin-top: 0.75rem; font-size: 0.85rem; color: var(--cinema-text-dim);">
+                                    Réservé le ${new Date(res.timestamp).toLocaleDateString('fr-FR')} à ${new Date(res.timestamp).toLocaleTimeString('fr-FR')}
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                });
+                
+                html += '</div>';
+                reservationsList.innerHTML = html;
+            } catch (error) {
+                loadingSpinner.style.display = 'none';
+                console.error('Erreur:', error);
+                reservationsList.innerHTML = '<div class="alert alert-error">Erreur lors du chargement des réservations</div>';
+            }
+        }
+
+        // Formate une date au format français lisible
+        function formatDate(dateStr) {
+            const date = new Date(dateStr);
+            const options = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' };
+            return date.toLocaleDateString('fr-FR', options);
+        }
+
+        // Logout handler
+        const logoutLink = document.getElementById('logoutLink');
+        if (logoutLink) {
+            logoutLink.addEventListener('click', async (e) => {
+                e.preventDefault();
+                try {
+                    const res = await fetch('/logout', {
+                        method: 'POST',
+                        credentials: 'include'
+                    });
+                    if (res.ok) {
+                        window.location.href = '/';
+                    }
+                } catch (err) {
+                    console.error(err);
+                }
+            });
+        }
+    </script>
+</body>
+</html>

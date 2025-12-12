@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Inscription - Cinéma CY Tech</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}">
+</head>
+<body>
+    <nav class="navbar">
+        <div class="navbar-container">
+            <a href="{{ url_for('accueil') }}" class="navbar-brand">🎬 Cinéma CY Tech</a>
+            <ul class="nav-links">
+                <li><a href="{{ url_for('accueil') }}">Accueil</a></li>
+                <li><a href="{{ url_for('connection') }}">Connexion</a></li>
+            </ul>
+        </div>
+    </nav>
+
+    <div class="container">
+        <div class="form-container">
+            <div class="card-header">
+                <h1>✨ Inscription</h1>
+                <p>Créez votre compte pour profiter du cinéma</p>
+            </div>
+
+            <div id="successMessage" class="alert alert-success hidden">
+                <span id="successText"></span>
+            </div>
+            <div id="errorMessage" class="alert alert-error hidden">
+                <span id="errorText"></span>
+            </div>
+
+            <form id="RegisterForm">
+                <div class="form-group">
+                    <label for="username">Nom d'utilisateur</label>
+                    <input type="text" id="username" name="username" class="form-control" placeholder="Choisissez un nom d'utilisateur" required minlength="3">
+                    <small class="text-sm text-light">Minimum 3 caractères</small>
+                </div>
+
+                <div class="form-group">
+                    <label for="password">Mot de passe</label>
+                    <input type="password" id="password" name="password" class="form-control" placeholder="Choisissez un mot de passe sécurisé" required minlength="4">
+                    <small class="text-sm text-light">Minimum 4 caractères</small>
+                </div>
+
+                <button type="submit" class="btn btn-primary btn-block">Créer mon compte</button>
+            </form>
+
+            <div class="text-center mt-3">
+                <p class="text-sm text-light">
+                    Déjà un compte ? 
+                    <a href="{{ url_for('connection') }}" class="link-primary">Se connecter</a>
+                </p>
+            </div>
+        </div>
+    </div>
+
+    <footer class="footer">
+        <p>&copy; 2025 Cinéma CY Tech</p>
+    </footer>
+
+    <script>
+        const registerForm = document.getElementById('RegisterForm');
+        const successMessage = document.getElementById('successMessage');
+        const errorMessage = document.getElementById('errorMessage');
+        const successText = document.getElementById('successText');
+        const errorText = document.getElementById('errorText');
+
+        registerForm.addEventListener('submit', async function(event) {
+            event.preventDefault();
+            
+            // Masquer les messages précédents
+            successMessage.classList.add('hidden');
+            errorMessage.classList.add('hidden');
+
+            const username = document.getElementById('username').value;
+            const password = document.getElementById('password').value;
+
+            try {
+                const response = await fetch('/register', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ username: username, password: password }),
+                    credentials: 'include'
+                });
+
+                const data = await response.json();
+
+                if (response.ok) {
+                    console.log('Inscription réussie:', data);
+                    successText.textContent = 'Compte créé avec succès ! Redirection...';
+                    successMessage.classList.remove('hidden');
+                    
+                    // Redirection après 1.5 secondes
+                    setTimeout(() => {
+                        window.location.href = '/connection';
+                    }, 1500);
+                } else {
+                    // Afficher l'erreur
+                    errorText.textContent = data.message || "Erreur lors de l'inscription. Veuillez réessayer.";
+                    errorMessage.classList.remove('hidden');
+                }
+            } catch (error) {
+                console.error('Erreur:', error);
+                errorText.textContent = "Erreur de connexion au serveur. Veuillez réessayer.";
+                errorMessage.classList.remove('hidden');
+            }
+        });
+    </script>
+</body>
+</html>
